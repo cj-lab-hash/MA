@@ -1,79 +1,51 @@
+// server.js or app.js
 const express = require('express');
-const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
+const db = require('./db');
 
 const app = express();
-
-// Middleware to parse JSON
 app.use(express.json());
 app.use(cors());
-
-// Serve static files from the "public" directory
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Endpoint to append data to the JSON file
+// POST /api/save - Save or update a cell
 app.post('/api/save', (req, res) => {
-    const newData = req.body;
-    console.log("Saving:", newData); 
+    const { index, value } = req.body;
+    const cellId = `cell${index}`;
 
-    // Check if the file exists
-    if (fs.existsSync('data.json')) {
-        // Read the current contents of the file
-        fs.readFile('data.json', 'utf8', (err, data) => {
+    db.run(
+        `INSERT INTO cells (id, value) VALUES (?, ?)
+         ON CONFLICT(id) DO UPDATE SET value = excluded.value`,
+        [cellId, value],
+        function (err) {
             if (err) {
-                console.error('Error reading data:', err);
-                return res.status(500).json({ message: 'Error reading data' });
-            }
-            let jsonData;
-        try {
-        jsonData = JSON.parse(data);
-            } catch (parseErr) {
-             console.error('Invalid JSON in data.json:', parseErr);
-             return res.status(500).json({ message: 'Invalid data format in data.json' });
-}
-            // Append the new data
-            jsonData[`cell${newData.index}`] = newData.value;
-
-            // Write the updated data back to the file
-            fs.writeFile('data.json', JSON.stringify(jsonData), 'utf8', (err) => {
-                if (err) {
-                    console.error('Error saving data:', err);
-                    return res.status(500).json({ message: 'Error saving data' });
-                }
-                res.json({ message: 'Data saved successfully!' });
-            });
-        });
-    } else {
-        // If the file doesn't exist, create a new one
-        let jsonData = {};
-        jsonData[`cell${newData.index}`] = newData.value;
-
-        fs.writeFile('data.json', JSON.stringify(jsonData), 'utf8', (err) => {
-            if (err) {
-                console.error('Error saving data:', err);
+                console.error('Error saving to DB:', err);
                 return res.status(500).json({ message: 'Error saving data' });
             }
             res.json({ message: 'Data saved successfully!' });
-        });
-    }
+        }
+    );
 });
 
-// Endpoint to load data from the JSON file
+// GET /api/data - Load all cells
 app.get('/api/data', (req, res) => {
-    if (fs.existsSync('data.json')) {
-        fs.readFile('data.json', 'utf8', (err, data) => {
-            if (err) {
-                console.error('Error reading data:', err);
-                return res.status(500).json({ message: 'Error reading data' });
-            }
-            res.json(JSON.parse(data));
+    db.all(`SELECT * FROM cells`, [], (err, rows) => {
+        if (err) {
+            console.error('Error fetching from DB:', err);
+            return res.status(500).json({ message: 'Error reading data' });
+        }
+
+        // Convert rows into JSON like { cell1: 'value1', cell2: 'value2' }
+        const data = {};
+        rows.forEach(row => {
+            data[row.id] = row.value;
         });
-    } else {
-        res.json({});
-    }
+
+        res.json(data);
+    });
 });
 
-// Start the server on port 3003
+// Start the server
 const PORT = 3003;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

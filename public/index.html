@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manual Actuator</title>
     <link rel="stylesheet" href="styles.css">
-    <link rel="icon" href="ma.ico" type="image/x-icon">
+    <link rel="icon" href="project.ico" type="image/x-icon">
 </head>
 <body>
 <div id="table">
@@ -40,23 +40,29 @@
         nextIndex = maxFound + 1;
     }
 
+    // ✅ Updated loadData function
     function loadData() {
+        const table = document.getElementById("editableTable");
+        const tbody = table.querySelector('tbody');
+
+        // Step 1: collect existing HTML values
+        const existingData = {};
+        document.querySelectorAll("#editableTable td[data-index]").forEach(cell => {
+            existingData[cell.getAttribute('data-index')] = cell.innerText;
+        });
+
+        // Step 2: fetch database data
         fetch('/api/data')
             .then(res => res.json())
             .then(data => {
-                const table = document.getElementById("editableTable");
-                const tbody = table.querySelector('tbody');
-                tbody.innerHTML = ""; // Clear all rows
+                // Merge existing HTML values into fetched DB data
+                const mergedData = { ...existingData, ...data };
 
-                // Find the highest cell index
-                let maxIndex = -1;
-                Object.keys(data).forEach(key => {
-                    const idx = parseInt(key.replace('cell', ''));
-                    if (idx > maxIndex) maxIndex = idx;
-                });
+                tbody.innerHTML = ""; // Clear rows
 
-                // Rebuild rows based on data
                 const columns = table.querySelectorAll('thead th').length;
+                const allKeys = Object.keys(mergedData).map(k => parseInt(k.replace('cell','')));
+                const maxIndex = allKeys.length > 0 ? Math.max(...allKeys) : -1;
                 const rowCount = Math.ceil((maxIndex + 1) / columns);
 
                 for (let r = 0; r < rowCount; r++) {
@@ -65,7 +71,7 @@
                         const cellIndex = r * columns + c;
                         const td = document.createElement('td');
                         td.setAttribute('data-index', cellIndex);
-                        td.innerText = data[`cell${cellIndex}`] || "";
+                        td.innerText = mergedData[`cell${cellIndex}`] || "";
                         td.ondblclick = () => editCell(td);
                         tr.appendChild(td);
                     }
@@ -73,6 +79,9 @@
                 }
 
                 nextIndex = (rowCount * columns);
+
+                // Save all merged data to DB
+                saveData();
             })
             .catch(err => console.error('Error loading data:', err));
     }
@@ -124,7 +133,6 @@
         const columnCount = table.querySelectorAll('thead th').length;
         const tbody = table.querySelector('tbody');
         const newRow = tbody.insertRow(-1);
-        let firstCell = null;
 
         for (let i = 0; i < columnCount; i++) {
             const newCell = newRow.insertCell(i);
@@ -137,11 +145,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ index: newCell.getAttribute('data-index'), value: "" })
             });
-
-            if (i === 0) firstCell = newCell;
         }
-
-        if (firstCell) editCell(firstCell);
     }
 
     function removeRow() {
@@ -160,7 +164,6 @@
         makeAllCellsEditable();
     };
 </script>
+    
 </body>
-
 </html>
-
